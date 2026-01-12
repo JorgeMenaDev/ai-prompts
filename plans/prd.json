@@ -1,0 +1,276 @@
+{
+  "description": "Message-Level Knowledge Trace + Corrections (GitHub Issue #144). This feature adds per-message knowledge traceability to bot responses in the Messages UI. When a user clicks a bot message, they see the RAG sources used (documents, FAQs, websites) with similarity % scores, titles, URLs/filenames, and chunk content. Users can create corrections as new Q&A pairs from traced replies; corrections are labeled in Q&A and prioritized in retrieval to reduce repeat mistakes. Corrections are only allowed when a RAG trace exists; otherwise guide to Behavior custom instructions. Architecture: Uses a new `ragTraces` table to store trace data separately from messages. Scope: Dashboard Messages UI only (not admin pages). Corrections apply to all sessions (sandbox + live). Data retention is permanent. Only RAG results are traced (not web search or other tools).",
+  "features": [
+    {
+      "category": "functional",
+      "description": "ragTraces table exists in Convex schema with required fields and indexes",
+      "steps": [
+        "Check convex/schema.ts contains ragTraces table definition",
+        "Verify table has fields: messageId, chatbotId, sessionId, requestId, searchQuery, sources array, totalResults, avgScore, createdAt",
+        "Verify sources array objects have: entryId, documentId (optional), score, content, order, title, type, url, fileName",
+        "Verify indexes exist: by_message, by_session, by_chatbot, by_request",
+        "Run npx convex dev and verify schema deploys without errors"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "RAG traces can be created via internal mutation",
+      "steps": [
+        "Check convex/ragTraces.ts exports createTrace internalMutation",
+        "Verify mutation accepts: messageId, chatbotId, sessionId, requestId, searchQuery, sources, totalResults",
+        "Verify mutation calculates avgScore from sources array",
+        "Verify mutation adds createdAt timestamp",
+        "Test by calling mutation directly and checking record in database"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "RAG traces can be queried by messageId with ownership verification",
+      "steps": [
+        "Check convex/ragTraces.ts exports getTraceWithDocuments query",
+        "Verify query requires authentication",
+        "Verify query checks ownership: message -> chatbot -> user chain",
+        "Verify query enriches sources with current document data (title, type, url, fileName)",
+        "Verify query handles deleted documents gracefully (marks documentExists: false)",
+        "Test query returns null for messages without traces"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Enhanced RAG search returns structured metadata alongside text",
+      "steps": [
+        "Check convex/documentsRag.ts exports searchDocumentsWithMetadata action",
+        "Verify action returns: text, results, sources array, totalResults",
+        "Verify sources array contains: entryId, documentId, score, content, order, title, type, url, fileName",
+        "Check findDocumentByRagEntryId internal query exists to lookup documents by ragEntryId",
+        "Test action with a chatbot that has knowledge and verify structured data is returned"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Server action wrapper calls enhanced search and returns full metadata",
+      "steps": [
+        "Check src/app/actions/search_documents_rag.ts exports searchDocumentsWithMetadata function",
+        "Verify function calls api.documentsRag.searchDocumentsWithMetadata",
+        "Verify function returns: found, text, sources array, totalResults",
+        "Test function handles errors gracefully"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "searchKnowledge tool returns structured ragTrace alongside context",
+      "steps": [
+        "Check src/app/api/andy/tools.ts createKnowledgeSearchTool function",
+        "Verify tool calls searchDocumentsWithMetadata instead of basic search",
+        "Verify tool returns ragTrace object with: searchQuery, sources, totalResults",
+        "Verify tool returns ragTrace: null when no results found",
+        "Test tool in isolation and verify structured data is returned"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "RAG trace is persisted after bot message is saved",
+      "steps": [
+        "Check src/app/api/messages/route.ts saves RAG trace after botMessageId is created",
+        "Verify trace is only saved when responseData.ragTrace exists",
+        "Verify trace persistence uses waitUntil for non-blocking operation",
+        "Verify trace includes: messageId, chatbotId, sessionId, requestId, searchQuery, sources, totalResults",
+        "Test by sending a message through widget and checking ragTraces table"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "i18n keys exist for knowledge trace and correction features",
+      "steps": [
+        "Check src/i18n/messages/en/chatbot.json has knowledgeTrace.* keys (title, sourcesUsed, avgRelevance, searchQuery, viewSource, createCorrection, unknownSource, noTrace.*)",
+        "Check src/i18n/messages/en/chatbot.json has detailPanel.* keys (info, knowledge, selectBotMessage, messageContext, correctThisReply, noTraceHelper)",
+        "Check src/i18n/messages/en/chatbot.json has correction.* keys (title, description, question.*, answer.*, basedOn, originalReply, useSourceAnswer, cancel, save, success, error, validation.*)",
+        "Check src/i18n/messages/en/chatbot.json has qa.* keys for correction badge/label (correctionBadge, correctionLabel)",
+        "Verify same keys exist in src/i18n/messages/es/chatbot.json with Spanish translations",
+        "Run bun run typecheck to ensure no missing translation keys"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Knowledge trace panel displays sources with scores and expandable content",
+      "steps": [
+        "Check src/features/messages/components/knowledge-trace-panel.tsx exists",
+        "Verify component uses useQuery to fetch trace via api.ragTraces.getTraceWithDocuments",
+        "Verify loading state shows skeleton UI",
+        "Verify no-trace state shows friendly message",
+        "Verify each source displays: score badge as percentage, type icon, title, chunk preview",
+        "Verify sources are expandable to show full content",
+        "Verify 'View source' button opens URL in new tab (when url exists)",
+        "Verify 'Create correction' button exists and triggers callback"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Knowledge tab shows selected message context for correction clarity",
+      "steps": [
+        "Verify Knowledge tab shows selected user question + bot reply summary header",
+        "Verify bot reply preview is read-only and truncates long responses with expand option",
+        "Verify 'Correct this reply' CTA is disabled when no trace exists",
+        "Verify disabled state shows helper text pointing to Behavior tab custom instructions"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Message detail panel has Info and Knowledge tabs using SegmentedControl",
+      "steps": [
+        "Check src/features/messages/components/message-detail-panel.tsx exists",
+        "Verify component uses SegmentedControl (not Tabs) for tab switching",
+        "Verify 'Info' tab shows existing VisitorInfoSidebar content",
+        "Verify 'Knowledge' tab shows KnowledgeTracePanel when bot message is selected",
+        "Verify Knowledge tab shows 'select a bot message' prompt when no message selected",
+        "Verify tab state persists when switching conversations"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Bot messages in conversation view can be selected to show knowledge trace",
+      "steps": [
+        "Check src/features/messages/components/conversation-view.tsx has onMessageSelect prop",
+        "Verify bot messages show a clickable icon on hover (e.g., BookOpen icon)",
+        "Verify clicking the icon calls onMessageSelect with message ID",
+        "Verify selected message has visual indicator (different background or border)",
+        "Verify user messages do not show selection icon"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Messages interface integrates new detail panel with message selection",
+      "steps": [
+        "Check src/features/messages/components/messages-interface-base.tsx uses MessageDetailPanel",
+        "Verify selectedMessageId state is managed in parent component",
+        "Verify ConversationView receives onMessageSelect callback",
+        "Verify MessageDetailPanel receives selectedMessageId prop",
+        "Verify right panel shows on desktop (hidden on mobile)",
+        "Test end-to-end: select conversation, click bot message, see knowledge tab"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Correction modal allows creating Q&A from knowledge source",
+      "steps": [
+        "Check src/features/messages/components/correction-modal.tsx exists",
+        "Verify modal has question input and answer textarea",
+        "Verify question prefills from last user message before selected bot reply",
+        "Verify answer prefills from selected bot reply, with option to override from selected source",
+        "Verify 'Based on: [source title]' text shows when source provided",
+        "Verify original bot reply is visible for reference",
+        "Verify cancel button closes modal without saving",
+        "Verify save button is disabled when inputs are empty",
+        "Verify save button shows loading state during submission"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Correction modal saves Q&A document with proper metadata",
+      "steps": [
+        "Open correction modal and fill question + answer",
+        "Click save and verify documentsRag.createDocument is called",
+        "Verify document is created with type: 'text' (stored as 'faq')",
+        "Verify metadata includes: source='correction', sessionId, messageId, chatbotId, createdFrom='message_trace'",
+        "Verify metadata includes originalQuestion + originalAnswer for audit",
+        "Verify metadata includes selectedSourceEntryId when user picked a source",
+        "Verify success toast appears after save",
+        "Verify modal closes after successful save",
+        "Navigate to Q&A tab and verify correction appears in list"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Corrections are indexed and used by RAG retrieval",
+      "steps": [
+        "Create correction and verify status is 'processing' initially",
+        "Verify convex workflow updates status to 'completed' after embeddings/indexing",
+        "Confirm correction appears in rag entries table (or equivalent index)",
+        "Search in widget and verify correction is retrieved in sources",
+        "Verify source label clearly indicates it is a correction"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Corrections are prioritized in retrieval and response generation",
+      "steps": [
+        "Define correction identification from metadata (source='correction')",
+        "Apply re-rank boost for corrections during retrieval (suggested multiplier: 1.2x)",
+        "Set correction minScore threshold (suggested: 0.82); only boost/reorder if met",
+        "If boosted correction score exceeds top non-correction by >=0.03, place above",
+        "If correction is top-1 and passes threshold, ensure it is included in context",
+        "Prompt/response logic prefers correction content when present and above threshold",
+        "Knowledge trace labels correction source type clearly"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Q&A list highlights corrections",
+      "steps": [
+        "Verify Q&A rows with correction metadata show 'Correction' badge",
+        "Verify row has subtle accent/border to distinguish corrections",
+        "Verify badge label is i18n",
+        "Verify list remains scannable on mobile"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "End-to-end: Knowledge trace displays correctly for widget messages",
+      "steps": [
+        "Create chatbot with FAQ knowledge (question + answer pair)",
+        "Open widget and ask a question that matches the FAQ",
+        "Go to Messages tab in dashboard",
+        "Select the conversation and click on bot response",
+        "Verify Knowledge tab shows the FAQ source with similarity score",
+        "Verify score is displayed as percentage (e.g., 85%)",
+        "Expand source and verify chunk content matches FAQ answer"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "End-to-end: Correction improves future responses",
+      "steps": [
+        "Create chatbot with minimal knowledge",
+        "Ask question that gets poor or no RAG match",
+        "In Messages UI, click 'Create correction' for the response",
+        "Enter better question/answer pair and save",
+        "Verify correction appears in Q&A tab with status 'completed'",
+        "Ask same question again in widget",
+        "Verify new response uses the correction as knowledge source",
+        "Check knowledge trace shows correction with high similarity score"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "No-trace state handled gracefully for messages without RAG search",
+      "steps": [
+        "Create a bot message that doesn't trigger RAG search (e.g., greeting)",
+        "Select that message in Messages UI",
+        "Verify Knowledge tab shows 'No knowledge trace' state",
+        "Verify state has friendly icon and explanation text",
+        "Verify no errors in console"
+      ],
+      "passes": false
+    }
+  ]
+}

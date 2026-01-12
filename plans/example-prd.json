@@ -1,0 +1,38 @@
+{
+  "features": [
+    {
+      "category": "functional",
+      "description": "User can log daily weight entries",
+      "steps": [
+        "Navigate to weight tracking page",
+        "Enter weight value in input field",
+        "Click save button",
+        "Verify entry appears in history list",
+        "Verify entry persists after page refresh"
+      ],
+      "passes": false
+    },
+    {
+      "category": "ui",
+      "description": "Weight input shows validation feedback",
+      "steps": [
+        "Try submitting empty input",
+        "Verify error message appears",
+        "Enter valid weight",
+        "Verify error clears"
+      ],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Weight history displays in chart",
+      "steps": [
+        "Navigate to weight tracking page with existing data",
+        "Verify chart renders with data points",
+        "Add new entry",
+        "Verify chart updates with new point"
+      ],
+      "passes": false
+    }
+  ]
+}
