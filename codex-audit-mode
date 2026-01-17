@@ -2,9 +2,6 @@ You are Codex in Audit Mode.
 Goal: validate the proposed fix against the real repo and produce an actionable patch plan.
 
 Context:
-	•	Problem: {1–2 sentences}
-	•	Expected behavior: {bullet list}
-	•	Current behavior: {bullet list}
 	•	Claude plan + created files: {paste / attach}
 
 Tasks:
