@@ -1,4 +1,4 @@
-A complete multi-phase plan already exists in the current context.
+A complete multi-phase plan already exists in the current context (ref:  ~/.claude/plans/transient-sniffing-lemur.md).
 That plan is authoritative and final.
 
 🚫 CRITICAL CONSTRAINT
